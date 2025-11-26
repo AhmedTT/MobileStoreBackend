@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -8,9 +8,27 @@ using MobileSparePartsManagement.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ==============================================================================
+// 🛠️ FIX 1: Configure Kestrel to listen on the Railway provided PORT.
+// This must be done on the builder.WebHost before builder.Build().
+// ==============================================================================
+var portVar = builder.Configuration.GetValue<int?>("PORT");
+
+if (portVar.HasValue && portVar.Value > 0)
+{
+    builder.WebHost.ConfigureKestrel(options =>
+    {
+        options.ListenAnyIP(portVar.Value);
+    });
+}
+// ==============================================================================
+
 // Add services to the container.
 
 // Database Context
+// 🛠️ FIX 2: Use GetConnectionString("Default") which points to the DATABASE_URL 
+// provided by Railway's Postgres service when linked. This is preferred 
+// over hardcoding a proxy URL in appsettings.
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 
@@ -20,9 +38,10 @@ builder.Services.AddScoped<TokenService>();
 
 // JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
-var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey is not configured");
-var issuer = jwtSettings["Issuer"] ?? throw new InvalidOperationException("JWT Issuer is not configured");
-var audience = jwtSettings["Audience"] ?? throw new InvalidOperationException("JWT Audience is not configured");
+// Use null-coalescing with a descriptive exception for clarity
+var secretKey = jwtSettings["SecretKey"] ?? throw new InvalidOperationException("JWT SecretKey is not configured.");
+var issuer = jwtSettings["Issuer"] ?? throw new InvalidOperationException("JWT Issuer is not configured.");
+var audience = jwtSettings["Audience"] ?? throw new InvalidOperationException("JWT Audience is not configured.");
 
 builder.Services.AddAuthentication(options =>
 {
@@ -61,7 +80,7 @@ builder.Services.AddCors(options =>
 // Controllers
 builder.Services.AddControllers();
 
-// OpenAPI (built-in .NET 9 support)
+// OpenAPI (built-in .NET 9 support - assuming you are on .NET 8/9 preview)
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
@@ -77,9 +96,13 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+// NOTE: UseHttpsRedirection relies on Kestrel knowing the port, which is now configured.
+// It should be fine to keep, but can sometimes cause issues in complex proxy environments.
 app.UseHttpsRedirection();
-if(app.Environment.IsProduction()&& builder.Configuration.GetValue<int?>("PORT") is not null)
-    builder.WebHost.UseUrls($"http://*:{builder.Configuration.GetValue<int>("PORT")}");
+
+// ❌ REMOVED: The incorrect port configuration line is removed here.
+// if(app.Environment.IsProduction()&& builder.Configuration.GetValue<int?>("PORT") is not null)
+//     builder.WebHost.UseUrls($"http://*:{builder.Configuration.GetValue<int>("PORT")}");
 
 // CORS
 app.UseCors("AllowAngular");
