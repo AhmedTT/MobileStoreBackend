@@ -78,6 +78,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+if(app.Environment.IsProduction()&& builder.Configuration.GetValue<int?>("PORT") is not null)
+    builder.WebHost.UseUrls($"http://*:{builder.Configuration.GetValue<int>("PORT")}");
 
 // CORS
 app.UseCors("AllowAngular");
