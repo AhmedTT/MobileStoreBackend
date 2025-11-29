@@ -1,9 +1,11 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using MobileSparePartsManagement.Api.DTOs.Auth;
 using MobileSparePartsManagement.Domain.Entities;
 using MobileSparePartsManagement.Infrastructure.Data;
 using MobileSparePartsManagement.Infrastructure.Services;
+using System.Security.Claims;
 
 namespace MobileSparePartsManagement.Api.Controllers;
 
@@ -29,6 +31,9 @@ public class AuthController : ControllerBase
     public async Task<ActionResult<LoginResponse>> Login([FromBody] LoginRequest request)
     {
         var user = await _context.Users
+            .Include(u => u.Role)
+                .ThenInclude(r => r.RolePermissions)
+                .ThenInclude(rp => rp.Permission)
             .FirstOrDefaultAsync(u => u.Email == request.Email);
 
         if (user == null)
@@ -45,11 +50,10 @@ public class AuthController : ControllerBase
         }
         catch (BCrypt.Net.SaltParseException)
         {
-            // Password hash is invalid/corrupted - user needs to re-register
             return Unauthorized(new { message = "Invalid password format. Please contact administrator or re-register." });
         }
 
-        var token = _tokenService.GenerateToken(user);
+        var token = await _tokenService.GenerateTokenAsync(user);
 
         var response = new LoginResponse
         {
@@ -57,7 +61,11 @@ public class AuthController : ControllerBase
             User = new UserDto
             {
                 Id = user.Id,
-                Email = user.Email
+                Email = user.Email,
+                RoleName = user.Role.Name,
+                Permissions = user.Role.RolePermissions
+                    .Select(rp => rp.Permission.Name)
+                    .ToList()
             }
         };
 
@@ -72,12 +80,25 @@ public class AuthController : ControllerBase
             return BadRequest(new { message = "Email already exists" });
         }
 
+        // Get default "User" role
+        var userRole = await _context.Roles
+            .Include(r => r.RolePermissions)
+            .ThenInclude(rp => rp.Permission)
+            .FirstOrDefaultAsync(r => r.Name == "User");
+
+        if (userRole == null)
+        {
+            return BadRequest(new { message = "Default user role not found. Please contact administrator." });
+        }
+
+    
         var user = new User
         {
             Id = Guid.NewGuid(),
             Email = request.Email,
             PasswordHash = _passwordService.HashPassword(request.Password),
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            RoleId=userRole.Id
         };
 
         _context.Users.Add(user);
@@ -90,5 +111,28 @@ public class AuthController : ControllerBase
         };
 
         return CreatedAtAction(nameof(Register), new { id = user.Id }, userDto);
+    }
+
+    [Authorize]
+    [HttpPost("change-password")]
+    public async Task<ActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                     ?? User.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+
+        if (string.IsNullOrEmpty(userId))
+            return Unauthorized();
+
+        var user = await _context.Users.FindAsync(Guid.Parse(userId));
+        if (user == null)
+            return NotFound(new { message = "User not found" });
+
+        if (!_passwordService.VerifyPassword(request.CurrentPassword, user.PasswordHash))
+            return BadRequest(new { message = "Current password is incorrect" });
+
+        user.PasswordHash = _passwordService.HashPassword(request.NewPassword);
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "Password changed successfully" });
     }
 }

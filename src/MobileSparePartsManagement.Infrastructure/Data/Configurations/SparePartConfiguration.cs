@@ -29,6 +29,12 @@ public class SparePartConfiguration : IEntityTypeConfiguration<SparePart>
             .HasPrecision(10, 2)
             .HasColumnName("price");
 
+        builder.Property(sp => sp.WholesalePrice)
+            .IsRequired()
+            .HasPrecision(10, 2)
+            .HasColumnName("wholesaleprice")
+            .HasDefaultValue(0.00m);
+
         builder.Property(sp => sp.SupplierId)
             .HasColumnName("supplier_id");
 
@@ -44,5 +50,6 @@ public class SparePartConfiguration : IEntityTypeConfiguration<SparePart>
         // Add check constraints for non-negative values
         builder.ToTable(t => t.HasCheckConstraint("CK_SparePart_Quantity", "\"quantity\" >= 0"));
         builder.ToTable(t => t.HasCheckConstraint("CK_SparePart_Price", "\"price\" >= 0"));
+        builder.ToTable(t => t.HasCheckConstraint("CK_SparePart_WholesalePrice", "\"wholesaleprice\" >= 0"));
     }
 }

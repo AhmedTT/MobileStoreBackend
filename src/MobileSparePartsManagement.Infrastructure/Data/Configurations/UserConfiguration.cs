@@ -28,7 +28,16 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
             .IsRequired()
             .HasColumnName("created_at");
 
+        builder.Property(u => u.RoleId)
+            .IsRequired()
+            .HasColumnName("roleid");
+
         builder.HasIndex(u => u.Email)
             .IsUnique();
+
+        builder.HasOne(u => u.Role)
+            .WithMany(r => r.Users)
+            .HasForeignKey(u => u.RoleId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

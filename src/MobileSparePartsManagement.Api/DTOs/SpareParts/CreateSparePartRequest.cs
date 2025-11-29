@@ -16,6 +16,10 @@ public class CreateSparePartRequest
     [Range(0, double.MaxValue, ErrorMessage = "Price must be non-negative")]
     public decimal Price { get; set; }
 
+    [Required(ErrorMessage = "Wholesale price is required")]
+    [Range(0, double.MaxValue, ErrorMessage = "Wholesale price must be non-negative")]
+    public decimal WholesalePrice { get; set; }
+
     [Required(ErrorMessage = "SupplierId is required")]
     public Guid SupplierId { get; set; }
 }
