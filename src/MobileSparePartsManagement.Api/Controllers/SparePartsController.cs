@@ -42,8 +42,8 @@ public class SparePartsController : ControllerBase
         // Apply filters
         if (!string.IsNullOrWhiteSpace(name))
         {
-            var normalizedName = name.Trim();
-            query = query.Where(sp => EF.Functions.Like(sp.Name, $"%{normalizedName}%"));
+            var normalizedName = name.Trim().ToLower();
+            query = query.Where(sp => sp.Name.ToLower().Contains(normalizedName));
         }
 
         if (supplierId.HasValue)
